@@ -1,0 +1,20 @@
+{
+  "short_name": "Flux",
+  "name": "Flux Presales Tracking",
+  "icons": [
+    {
+      "src": "falcon.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "falcon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#4285F4",
+  "background_color": "#ffffff"
+}

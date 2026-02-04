@@ -1,0 +1,12 @@
+# If Python:
+venv/
+.env
+__pycache__/
+*.pyc
+
+# If Node.js:
+node_modules/
+
+# General
+.git
+.gitignore
