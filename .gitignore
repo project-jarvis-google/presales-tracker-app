@@ -22,3 +22,5 @@ source/
 .DS_Store
 .vscode/
 .idea/
+.debug/
+.dev/

@@ -17,7 +17,7 @@ def _dict_from_row(cursor, row):
 
 # CREATE
 def create_record(data):
-    """Insert new record"""
+    """Insert new record - accepts None/null values for optional fields"""
     conn = get_db()
     cursor = conn.cursor()
     query = """
@@ -35,34 +35,41 @@ def create_record(data):
             %s, %s, %s, %s
         ) RETURNING *;
     """
+    # Use .get() with None as default - this properly handles null values from frontend
     values = (
-        data.get('account_name'),
-        data.get('opportunity'),
-        data.get('region_location'),
-        data.get('region'),
-        data.get('sub_region'),
-        data.get('deal_value_usd'),
-        data.get('scoping_doc'),
-        data.get('vector_link'),
-        data.get('charging_on_vector'),
-        data.get('period_of_presales_weeks'),
-        data.get('status'),
-        data.get('assignee_from_gsd'),
-        data.get('pursuit_lead'),
-        data.get('delivery_manager'),
-        data.get('presales_start_date'),
-        data.get('expected_planned_start'),
-        data.get('sow_signature_date'),
-        data.get('staffing_completed_flag'),
-        data.get('staffing_poc'),
-        data.get('remarks'),
+        data.get('account_name'),  # Required field
+        data.get('opportunity', None),  # Optional - can be NULL
+        data.get('region_location', None),
+        data.get('region', None),
+        data.get('sub_region', None),
+        data.get('deal_value_usd', None),
+        data.get('scoping_doc', None),
+        data.get('vector_link', None),
+        data.get('charging_on_vector', None),
+        data.get('period_of_presales_weeks', None),
+        data.get('status', None),
+        data.get('assignee_from_gsd', None),
+        data.get('pursuit_lead', None),
+        data.get('delivery_manager', None),
+        data.get('presales_start_date', None),
+        data.get('expected_planned_start', None),
+        data.get('sow_signature_date', None),
+        data.get('staffing_completed_flag', False),  # Boolean - default to False
+        data.get('staffing_poc', None),
+        data.get('remarks', None),
     )
-    cursor.execute(query, values)
-    result = cursor.fetchone()
-    conn.commit()
-    result_dict = _dict_from_row(cursor, result)
-    conn.close()
-    return result_dict
+    
+    try:
+        cursor.execute(query, values)
+        result = cursor.fetchone()
+        conn.commit()
+        result_dict = _dict_from_row(cursor, result)
+        return result_dict
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 # READ ALL
 def get_all_records():
@@ -88,35 +95,51 @@ def get_record_by_id(record_id):
 
 # UPDATE
 def update_record(record_id, data):
-    """Update record by ID"""
+    """Update record by ID - properly handles NULL values"""
     conn = get_db()
     cursor = conn.cursor()
-    # Filter out None values and validate column names
+    
+    # Build update query - include fields even if they are None/null
+    # This allows clearing fields by setting them to NULL
     updates = []
     values = []
-    for key, value in data.items():
-        if value is not None and key in ALLOWED_COLUMNS:
+    
+    for key in ALLOWED_COLUMNS:
+        if key in data:  # Only update fields that are present in the data dict
             updates.append(f"{key} = %s")
-            values.append(value)
+            values.append(data[key])  # Include even if None - this sets to NULL
+    
     if not updates:
         conn.close()
         return None
+    
     values.append(record_id)
     query = f"UPDATE presales_tracking SET {', '.join(updates)} WHERE id = %s RETURNING *"
-    cursor.execute(query, values)
-    result = cursor.fetchone()
-    conn.commit()
-    result_dict = _dict_from_row(cursor, result)
-    conn.close()
-    return result_dict
+    
+    try:
+        cursor.execute(query, values)
+        result = cursor.fetchone()
+        conn.commit()
+        result_dict = _dict_from_row(cursor, result)
+        return result_dict
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 # DELETE
 def delete_record(record_id):
     """Delete record by ID"""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM presales_tracking WHERE id = %s RETURNING id", (record_id,))
-    result = cursor.fetchone()
-    conn.commit()
-    conn.close()
-    return result is not None
+    try:
+        cursor.execute("DELETE FROM presales_tracking WHERE id = %s RETURNING id", (record_id,))
+        result = cursor.fetchone()
+        conn.commit()
+        return result is not None
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
