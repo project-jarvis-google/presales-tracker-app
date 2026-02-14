@@ -1,6 +1,7 @@
 """
-Email Service Module
-Sends notification emails for user management actions
+Email Service Module - SMTP with App Password
+Sends notification emails for user management with approval/rejection flow
+Production-ready version for Cloud Run deployment
 """
 
 import smtplib
@@ -12,28 +13,36 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Email configuration from environment variables
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://presales-backend-455538062800.us-central1.run.app")
 
-def send_user_added_email(user_email: str, user_name: str, role: str, admin_name: str):
+# SMTP Settings (App Password Method)
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME")  # Your Gmail address
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")  # Your Gmail App Password
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL")  # Email address shown as sender
+
+def send_invite_email(user_email: str, user_name: str, role: str, admin_name: str, invite_token: str):
     """
-    Send email to user when they are added to the system by an admin
+    Send invitation email to user with approve/reject links
     
     Args:
         user_email: User's email address
         user_name: User's name
         role: User's role (presales_viewer, presales_creator, presales_admin)
         admin_name: Name of the admin who added them
+        invite_token: Unique invite token for this invitation
     
     Returns:
         bool: True if email sent successfully, False otherwise
     """
-    if not SMTP_USER or not SMTP_PASSWORD:
-        print("⚠️ Warning: Email configuration missing. Email not sent.")
+    if not SMTP_FROM_EMAIL:
+        print(" SMTP_FROM_EMAIL not configured in .env file")
         return False
+    
+    approve_url = f"{APP_BASE_URL}/invite/approve?token={invite_token}"
+    reject_url = f"{APP_BASE_URL}/invite/reject?token={invite_token}"
     
     role_labels = {
         'presales_admin': 'Presales Admin',
@@ -42,36 +51,27 @@ def send_user_added_email(user_email: str, user_name: str, role: str, admin_name
     }
     role_label = role_labels.get(role, role)
     
-    subject = "🎉 Welcome to Flux - Your Account Has Been Created"
+    subject = "You've Been Invited to Join Flux"
     
     body = f"""
 Hello {user_name},
 
-Great news! Your Flux account has been created by {admin_name}.
+Great news! You've been invited to join the Flux Presales Tracking System by {admin_name}.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Please verify the below details:
  Email:        {user_email}
  Name:         {user_name}
  Role:         {role_label}
- Added by:     {admin_name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Invited by:   {admin_name}
 
-You can now log in to the Flux Presales Tracking System using your Google account:
- https://flux.yourcompany.com
-
-Get started by:
-1. Signing in with your @google.com email
-2. Exploring the opportunities dashboard
-3. Managing your presales pipeline
-
-Your role ({role_label}) gives you the following permissions:
+Your role ({role_label}) will give you the following permissions:
 """
     
     if role == 'presales_admin':
         body += """
  View all opportunities
  Create new opportunities
-Edit opportunities
+ Edit opportunities
  Delete opportunities
  Manage users
 """
@@ -79,22 +79,27 @@ Edit opportunities
         body += """
  View all opportunities
  Create new opportunities
- Edit opportunities (admin only)
- Delete opportunities (admin only)
-Manage users (admin only)
 """
     else:  # presales_viewer
         body += """
  View all opportunities
- Create opportunities (creator/admin only)
- Edit opportunities (creator/admin only)
- Delete opportunities (admin only)
- Manage users (admin only)
 """
-    
     body += f"""
+ ACTION REQUIRED
+Please click one of the links below to respond to this invitation:
 
-If you have any questions, please contact the administrator at {ADMIN_EMAIL}.
+ ACCEPT INVITATION
+   {approve_url}
+
+ DECLINE INVITATION
+   {reject_url}
+
+If you accept, you'll be able to sign in using your Google account at:
+ {APP_BASE_URL}
+
+This invitation will expire in 7 days.
+
+If you have any questions, please contact {admin_name} at {ADMIN_EMAIL}.
 
 Best regards,
 The Flux Team
@@ -102,24 +107,83 @@ The Flux Team
     
     return send_email(user_email, subject, body)
 
-def send_role_changed_email(user_email: str, user_name: str, old_role: str, new_role: str, admin_name: str):
+def send_approval_notification_to_admin(user_email: str, user_name: str, admin_email: str):
     """
-    Send email to user when their role is changed by an admin
+    Notify admin that user accepted the invitation
     
     Args:
         user_email: User's email address
         user_name: User's name
-        old_role: Previous role
-        new_role: New role
-        admin_name: Name of the admin who changed the role
+        admin_email: Admin's email address
     
     Returns:
-        bool: True if email sent successfully, False otherwise
+        bool: True if email sent successfully
     """
-    if not SMTP_USER or not SMTP_PASSWORD:
-        print("⚠️ Warning: Email configuration missing. Email not sent.")
-        return False
+    subject = f" {user_name} Accepted Your Flux Invitation"
     
+    body = f"""
+Hello,
+
+Good news! {user_name} ({user_email}) has accepted your invitation to join Flux.
+
+User:         {user_name}
+ Email:        {user_email}
+ Status:       ACCEPTED 
+
+The user can now sign in to Flux using their Google account.
+You can manage their permissions at any time through the People Management page.
+
+Best regards,
+The Flux Team
+    """
+    
+    return send_email(admin_email, subject, body)
+
+def send_rejection_notification_to_admin(user_email: str, user_name: str, admin_email: str):
+    """
+    Notify admin that user rejected the invitation
+    
+    Args:
+        user_email: User's email address
+        user_name: User's name
+        admin_email: Admin's email address
+    
+    Returns:
+        bool: True if email sent successfully
+    """
+    subject = f" {user_name} Declined Your Flux Invitation"
+    
+    body = f"""
+Hello,
+
+{user_name} ({user_email}) has declined your invitation to join Flux.
+
+User:         {user_name}
+ Email:        {user_email}
+ Status:       DECLINED 
+
+The user account has not been activated. If you believe this was a mistake, 
+you can send another invitation through the People Management page.
+
+Best regards,
+The Flux Team
+    """
+    
+    return send_email(admin_email, subject, body)
+
+def send_user_added_email(user_email: str, user_name: str, role: str, admin_name: str):
+    """
+    Send email to user when they are added to the system by an admin
+    (Legacy function - use send_invite_email instead)
+    """
+    # This function is deprecated - invites now require a token
+    print(" Warning: send_user_added_email is deprecated. Use send_invite_email instead.")
+    return False
+
+def send_role_changed_email(user_email: str, user_name: str, old_role: str, new_role: str, admin_name: str):
+    """
+    Send email to user when their role is changed by an admin
+    """
     role_labels = {
         'presales_admin': 'Presales Admin',
         'presales_creator': 'Presales Creator',
@@ -128,24 +192,21 @@ def send_role_changed_email(user_email: str, user_name: str, old_role: str, new_
     old_role_label = role_labels.get(old_role, old_role)
     new_role_label = role_labels.get(new_role, new_role)
     
-    subject = "🔄 Your Flux Role Has Been Updated"
+    subject = "Your Flux Role Has Been Updated"
     
     body = f"""
 Hello {user_name},
 
 Your role in the Flux Presales Tracking System has been updated by {admin_name}.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Email:        {user_email}
- Name:         {user_name}
+ Email:         {user_email}
+ Name:          {user_name}
  Previous Role: {old_role_label}
  New Role:      {new_role_label}
- Updated by:   {admin_name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Updated by:    {admin_name}
 
 Your new role ({new_role_label}) gives you the following permissions:
 """
-    
     if new_role == 'presales_admin':
         body += """
  View all opportunities
@@ -158,17 +219,10 @@ Your new role ({new_role_label}) gives you the following permissions:
         body += """
  View all opportunities
  Create new opportunities
- Edit opportunities (admin only)
- Delete opportunities (admin only)
- Manage users (admin only)
 """
     else:  # presales_viewer
         body += """
  View all opportunities
- Create opportunities (creator/admin only)
- Edit opportunities (creator/admin only)
- Delete opportunities (admin only)
-Manage users (admin only)
 """
     
     body += f"""
@@ -184,19 +238,7 @@ The Flux Team
 def send_user_removed_email(user_email: str, user_name: str, admin_name: str):
     """
     Send email to user when they are removed from the system by an admin
-    
-    Args:
-        user_email: User's email address
-        user_name: User's name
-        admin_name: Name of the admin who removed them
-    
-    Returns:
-        bool: True if email sent successfully, False otherwise
     """
-    if not SMTP_USER or not SMTP_PASSWORD:
-        print(" Warning: Email configuration missing. Email not sent.")
-        return False
-    
     subject = " Your Flux Account Has Been Removed"
     
     body = f"""
@@ -204,13 +246,12 @@ Hello {user_name},
 
 Your access to the Flux Presales Tracking System has been removed by {admin_name}.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Email:        {user_email}
  Name:         {user_name}
  Removed by:   {admin_name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-You will no longer be able to access the Flux system. If you believe this is an error or would like to request access again, please contact the administrator at {ADMIN_EMAIL}.
+You will no longer be able to access the Flux system. If you believe this is an error 
+or would like to request access again, please contact the administrator at {ADMIN_EMAIL}.
 
 Thank you for using Flux.
 
@@ -222,7 +263,7 @@ The Flux Team
 
 def send_email(to_email: str, subject: str, body: str):
     """
-    Send email using SMTP
+    Send email using SMTP with app password
     
     Args:
         to_email: Recipient email address
@@ -233,55 +274,63 @@ def send_email(to_email: str, subject: str, body: str):
         bool: True if email sent successfully, False otherwise
     """
     try:
+        print(f" Preparing to send email to {to_email}")
+        
+        # Validate configuration
+        if not SMTP_USERNAME or not SMTP_PASSWORD:
+            print(" SMTP credentials not configured")
+            print("   Please set SMTP_USERNAME and SMTP_PASSWORD in .env")
+            return False
+        
         # Create message
-        msg = MIMEMultipart()
-        msg['From'] = SMTP_USER
-        msg['To'] = to_email
-        msg['Subject'] = subject
+        message = MIMEMultipart()
+        message['From'] = SMTP_FROM_EMAIL or SMTP_USERNAME
+        message['To'] = to_email
+        message['Subject'] = subject
         
-        # Attach body
-        msg.attach(MIMEText(body, 'plain'))
+        message.attach(MIMEText(body, 'plain'))
         
-        # Connect to SMTP server
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-        server.starttls()  # Enable TLS encryption
-        server.login(SMTP_USER, SMTP_PASSWORD)
+        # Connect to SMTP server and send email
+        print(f" Connecting to {SMTP_SERVER}:{SMTP_PORT}...")
         
-        # Send email
-        server.send_message(msg)
-        server.quit()
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.set_debuglevel(0)  # Set to 1 for verbose debugging
+            
+            # Start TLS encryption
+            print(" Starting TLS encryption...")
+            server.starttls()
+            
+            # Login
+            print(" Logging in...")
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            
+            # Send email
+            print("Sending email...")
+            server.send_message(message)
         
         print(f" Email sent successfully to {to_email}")
         return True
+        
+    except smtplib.SMTPAuthenticationError as e:
+        print(f" SMTP Authentication failed")
+        print(f"   Error: {e}")
+        print(f"\nTroubleshooting:")
+        print(f"   1. Verify SMTP_USERNAME is correct")
+        print(f"   2. Verify SMTP_PASSWORD is a valid App Password")
+        print(f"   3. For Gmail, enable 2-Step Verification and generate App Password")
+        print(f"   4. App Password format: 16 characters, no spaces")
+        return False
+        
+    except smtplib.SMTPException as e:
+        print(f" SMTP error occurred")
+        print(f"   Error: {e}")
+        print(f"\n Troubleshooting:")
+        print(f"   1. Check SMTP_SERVER and SMTP_PORT settings")
+        print(f"   2. Verify network connectivity")
+        print(f"   3. Check if SMTP is blocked by firewall")
+        return False
         
     except Exception as e:
         print(f" Failed to send email to {to_email}")
         print(f"   Error: {e}")
         return False
-
-# Test function (optional - for debugging)
-def test_email_config():
-    """Test email configuration"""
-    print("\n" + "="*50)
-    print("Testing Email Configuration")
-    print("="*50)
-    
-    if not SMTP_USER:
-        print(" SMTP_USER not configured")
-        return False
-    
-    if not SMTP_PASSWORD:
-        print("SMTP_PASSWORD not configured")
-        return False
-    
-    if not ADMIN_EMAIL:
-        print(" ADMIN_EMAIL not configured")
-        return False
-    
-    print(f"SMTP_HOST: {SMTP_HOST}")
-    print(f"SMTP_PORT: {SMTP_PORT}")
-    print(f" SMTP_USER: {SMTP_USER}")
-    print(f" ADMIN_EMAIL: {ADMIN_EMAIL}")
-    print("="*50 + "\n")
-    
-    return True
