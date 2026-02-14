@@ -1,30 +1,29 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../utils/constants';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://presales-backend-455538062800.us-central1.run.app';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,
 });
 
-// Request interceptor to add user ID header
+// Request interceptor to add JWT token
 api.interceptors.request.use(
   (config) => {
     try {
-      const userStr = sessionStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        if (user && user.email) {
-          // Use email as the user identifier
-          config.headers['user-id'] = user.email;
-          console.log('✓ Added user-id header:', user.email);
-        }
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('flux_token');
+      
+      if (token) {
+        // Add Authorization header with Bearer token
+        config.headers['Authorization'] = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('✗ Error parsing user from sessionStorage:', error);
+      console.error('Error reading token from localStorage:', error);
     }
-    
     return config;
   },
   (error) => Promise.reject(error)
@@ -41,16 +40,29 @@ api.interceptors.response.use(
       
       error.message = errorMessage;
       
-      // If 401 or 403, clear session and redirect to login
-      if (error.response.status === 401 || error.response.status === 403) {
-        console.error('✗ Authentication failed - clearing session');
-        sessionStorage.removeItem('user');
+      // Handle authentication errors (401 = unauthorized, token expired/invalid)
+      if (error.response.status === 401) {
+        console.log('🔒 Token expired or invalid - logging out');
+        
+        // Clear all session data
+        localStorage.removeItem('flux_token');
+        localStorage.removeItem('flux_user'); // Changed from sessionStorage to localStorage
+        localStorage.removeItem('lastActivity');
+        
+        // Redirect to login
         setTimeout(() => {
           window.location.href = '/';
-        }, 1000);
+        }, 500);
+      }
+      
+      // Handle authorization errors (403 = forbidden)
+      if (error.response.status === 403) {
+        error.message = 'You do not have permission to perform this action.';
       }
     } else if (error.request) {
-      error.message = 'No response from server. Please check your connection.';
+      error.message = 'Unable to connect to server. Please check your connection.';
+    } else {
+      error.message = 'An unexpected error occurred.';
     }
     
     return Promise.reject(error);
@@ -59,54 +71,65 @@ api.interceptors.response.use(
 
 // Auth Services
 export const authService = {
-  googleAuth: (token) => {
-    console.log('Google auth request');
-    return api.post('/auth/google', { token });
+  /**
+   * Authenticate with Google OAuth
+   * @param {string} token - Google OAuth token
+   * @returns {Promise} - Response with user data and JWT token
+   */
+  googleAuth: async (token) => {
+    const response = await axios.post(`${API_BASE_URL}/auth/google`, { token });
+    
+    // Store JWT token and user data
+    if (response.data.token) {
+      console.log('🔑 Storing JWT token');
+      localStorage.setItem('flux_token', response.data.token);
+    }
+    
+    if (response.data.user) {
+      console.log('👤 Storing user data');
+      localStorage.setItem('flux_user', JSON.stringify(response.data.user)); // Changed from sessionStorage to localStorage
+    }
+    
+    return response;
   },
+  
+  /**
+   * Verify if current JWT token is valid
+   * @returns {Promise} - Response with user data if valid
+   */
+  verifyToken: async () => {
+    return await api.get('/auth/verify');
+  },
+  
+  /**
+   * Logout - clear all tokens and session data
+   */
+  logout: () => {
+    console.log('👋 Clearing all session data');
+    localStorage.removeItem('flux_token');
+    localStorage.removeItem('flux_user'); // Changed from sessionStorage to localStorage
+    localStorage.removeItem('lastActivity');
+    
+    // Broadcast logout to other tabs
+    localStorage.setItem('logout-event', Date.now().toString());
+  }
 };
 
 // User Management Services
 export const userService = {
-  getAll: () => {
-    console.log('Getting all users');
-    return api.get('/users/');
-  },
-  add: (userData) => {
-    console.log('Adding user:', userData);
-    return api.post('/users/', userData);
-  },
-  updateRole: (userId, role) => {
-    console.log('Updating user role:', userId, role);
-    return api.put('/users/role', { user_id: userId, role });
-  },
-  delete: (userId) => {
-    console.log('Deleting user:', userId);
-    return api.delete(`/users/${userId}`);
-  },
+  getAll: () => api.get('/users/'),
+  add: (userData) => api.post('/users/', userData),
+  updateRole: (userId, role) => api.put('/users/role', { user_id: userId, role }),
+  delete: (userId) => api.delete(`/users/${userId}`),
 };
 
 // Opportunity Services
 export const opportunityService = {
-  getAll: () => {
-    console.log('Getting all opportunities');
-    return api.get('/opportunities/');
-  },
-  getById: (id) => {
-    console.log('Getting opportunity:', id);
-    return api.get(`/opportunities/${id}`);
-  },
-  create: (data) => {
-    console.log('Creating opportunity with data:', data);
-    return api.post('/opportunities/', data);
-  },
-  update: (id, data) => {
-    console.log('Updating opportunity', id, 'with data:', data);
-    return api.put(`/opportunities/${id}`, data);
-  },
-  delete: (id) => {
-    console.log('Deleting opportunity:', id);
-    return api.delete(`/opportunities/${id}`);
-  },
+  getAll: () => api.get('/opportunities/'),
+  getById: (id) => api.get(`/opportunities/${id}`),
+  create: (data) => api.post('/opportunities/', data),
+  update: (id, data) => api.put(`/opportunities/${id}`, data),
+  delete: (id) => api.delete(`/opportunities/${id}`),
 };
 
 export default api;
