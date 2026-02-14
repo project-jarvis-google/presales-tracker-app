@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Paper, Typography, Alert, CircularProgress, Container } from '@mui/material';
 import { GoogleLogin } from '@react-oauth/google';
 import { authService } from '../../services/api';
@@ -21,8 +21,8 @@ const floatReverse = keyframes`
 `;
 
 const pulse = keyframes`
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.05); }
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
 `;
 
 const slideIn = keyframes`
@@ -60,19 +60,155 @@ const FloatingIcon = ({ icon, delay, animation = float, size = 48, color = '#667
   </Box>
 );
 
-const DataFlowLine = ({ delay }) => (
-  <Box
-    sx={{
-      position: 'absolute',
-      width: 2,
-      height: 100,
-      background: 'linear-gradient(180deg, transparent 0%, #667eea 50%, transparent 100%)',
-      animation: `${pulse} 3s ease-in-out infinite`,
-      animationDelay: `${delay}s`,
-      opacity: 0.3,
-    }}
-  />
-);
+// Interactive Flowing Particles Component
+const FlowingParticles = () => {
+  const canvasRef = useRef(null);
+  const particlesRef = useRef([]);
+  const mouseRef = useRef({ x: 0, y: 0, active: false });
+  const animationFrameRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      initParticles();
+    };
+
+    const initParticles = () => {
+      const particles = [];
+      const numParticles = 100;
+      const colors = ['#667eea', '#764ba2', '#f093fb', '#4ade80', '#fbbf24'];
+
+      for (let i = 0; i < numParticles; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: (Math.random() - 0.5) * 0.8,
+          radius: Math.random() * 3 + 1,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          originalVx: (Math.random() - 0.5) * 0.8,
+          originalVy: (Math.random() - 0.5) * 0.8,
+        });
+      }
+      particlesRef.current = particles;
+    };
+
+    const handleMouseMove = (e) => {
+      mouseRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        active: true,
+      };
+    };
+
+    const handleMouseLeave = () => {
+      mouseRef.current.active = false;
+    };
+
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const particles = particlesRef.current;
+      const mouse = mouseRef.current;
+
+      particles.forEach((particle) => {
+        if (mouse.active) {
+          const dx = mouse.x - particle.x;
+          const dy = mouse.y - particle.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const maxDistance = 200;
+
+          if (distance < maxDistance) {
+            const force = (maxDistance - distance) / maxDistance;
+            particle.vx += (dx / distance) * force * 0.2;
+            particle.vy += (dy / distance) * force * 0.2;
+          }
+        } else {
+          particle.vx += (particle.originalVx - particle.vx) * 0.05;
+          particle.vy += (particle.originalVy - particle.vy) * 0.05;
+        }
+
+        particle.vx *= 0.98;
+        particle.vy *= 0.98;
+
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+
+        if (particle.x < 0 || particle.x > canvas.width) {
+          particle.vx *= -1;
+          particle.x = Math.max(0, Math.min(canvas.width, particle.x));
+        }
+        if (particle.y < 0 || particle.y > canvas.height) {
+          particle.vy *= -1;
+          particle.y = Math.max(0, Math.min(canvas.height, particle.y));
+        }
+
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+        ctx.fillStyle = particle.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = particle.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      particles.forEach((p1, i) => {
+        particles.slice(i + 1).forEach((p2) => {
+          const dx = p1.x - p2.x;
+          const dy = p1.y - p2.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < 100) {
+            const opacity = (1 - distance / 100) * 0.2;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        });
+      });
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
+    animate();
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+      }}
+    />
+  );
+};
 
 const LoginPage = ({ onLogin }) => {
   const [error, setError] = useState('');
@@ -84,11 +220,9 @@ const LoginPage = ({ onLogin }) => {
 
     try {
       const response = await authService.googleAuth(credentialResponse.credential);
-      console.log('Login successful:', response.data);
       onLogin(response.data.user);
     } catch (err) {
-      console.error('Login error:', err);
-      setError(err.response?.data?.detail || 'Login failed. Please ensure you have been granted access by an administrator.');
+      setError(err.response?.data?.detail || err.message || 'Login failed. Please ensure you have been granted access by an administrator.');
     } finally {
       setLoading(false);
     }
@@ -110,6 +244,8 @@ const LoginPage = ({ onLogin }) => {
         position: 'relative',
       }}
     >
+      <FlowingParticles />
+
       {/* Animated Background Elements */}
       <Box
         sx={{
@@ -119,7 +255,6 @@ const LoginPage = ({ onLogin }) => {
           overflow: 'hidden',
         }}
       >
-        {/* Large Gradient Orbs */}
         <Box
           sx={{
             position: 'absolute',
@@ -145,7 +280,6 @@ const LoginPage = ({ onLogin }) => {
           }}
         />
 
-        {/* Floating Icons - Distributed Around the Page */}
         <FloatingIcon 
           icon={<CheckCircleIcon />} 
           delay={0} 
@@ -192,22 +326,20 @@ const LoginPage = ({ onLogin }) => {
           sx={{ top: '60%', right: '8%' }}
         />
 
-        {/* Animated Grid Lines */}
         <Box
           sx={{
             position: 'absolute',
             width: '100%',
             height: '100%',
             backgroundImage: `
-              linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
-              linear-gradient(180deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+              linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+              linear-gradient(180deg, rgba(255,255,255,0.02) 1px, transparent 1px)
             `,
             backgroundSize: '50px 50px',
             animation: `${pulse} 4s ease-in-out infinite`,
           }}
         />
 
-        {/* Rotating Ring */}
         <Box
           sx={{
             position: 'absolute',
@@ -230,14 +362,13 @@ const LoginPage = ({ onLogin }) => {
           sx={{
             p: { xs: 4, sm: 6 },
             borderRadius: 4,
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px)',
-            border: '2px solid rgba(255, 255, 255, 0.3)',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            background: 'rgba(255, 255, 255, 0.98)',
+            backdropFilter: 'blur(30px)',
+            border: '2px solid rgba(255, 255, 255, 0.4)',
+            boxShadow: '0 30px 80px rgba(0, 0, 0, 0.35)',
             animation: `${slideIn} 0.8s ease-out`,
           }}
         >
-          {/* Logo */}
           <Box
             sx={{
               width: 100,
@@ -262,7 +393,6 @@ const LoginPage = ({ onLogin }) => {
             />
           </Box>
 
-          {/* Title */}
           <Typography
             variant="h3"
             fontWeight="700"
@@ -274,6 +404,17 @@ const LoginPage = ({ onLogin }) => {
               WebkitTextFillColor: 'transparent',
               mb: 1,
               fontSize: { xs: '2rem', sm: '2.5rem' },
+              position: 'relative',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: -8,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '60%',
+                height: '3px',
+                background: 'linear-gradient(90deg, transparent, #667eea, #764ba2, transparent)',
+              }
             }}
           >
             Welcome to Flux
@@ -292,7 +433,6 @@ const LoginPage = ({ onLogin }) => {
             Presales Tracking System
           </Typography>
 
-          {/* Divider */}
           <Box
             sx={{
               width: '60px',
@@ -304,7 +444,6 @@ const LoginPage = ({ onLogin }) => {
             }}
           />
 
-          {/* Feature Pills */}
           <Box
             sx={{
               display: 'flex',
@@ -330,6 +469,7 @@ const LoginPage = ({ onLogin }) => {
                   borderRadius: 3,
                   background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
                   border: '1px solid rgba(102, 126, 234, 0.2)',
+                  animation: `${slideIn} 0.6s ease-out ${0.2 + index * 0.1}s both`,
                 }}
               >
                 {React.cloneElement(item.icon, { sx: { fontSize: 16, color: '#667eea' } })}
@@ -365,6 +505,7 @@ const LoginPage = ({ onLogin }) => {
                 mb: 3, 
                 borderRadius: 2,
                 border: '1px solid rgba(239, 68, 68, 0.2)',
+                animation: `${slideIn} 0.3s ease-out`,
               }}
             >
               {error}
@@ -417,7 +558,6 @@ const LoginPage = ({ onLogin }) => {
           </Box>
         </Paper>
 
-        {/* Bottom Feature Cards */}
         <Box
           sx={{
             display: 'flex',
@@ -439,15 +579,15 @@ const LoginPage = ({ onLogin }) => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.5,
-                background: 'rgba(255, 255, 255, 0.95)',
+                background: 'rgba(255, 255, 255, 0.98)',
                 backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
                 borderRadius: 2,
                 animation: `${slideIn} 0.8s ease-out ${0.2 + index * 0.1}s both`,
+                transition: 'all 0.3s ease',
                 '&:hover': {
                   transform: 'translateY(-4px)',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
-                  transition: 'all 0.3s ease',
+                  boxShadow: '0 12px 30px rgba(0, 0, 0, 0.25)',
                 }
               }}
             >

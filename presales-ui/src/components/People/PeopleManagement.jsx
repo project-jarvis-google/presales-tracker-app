@@ -20,6 +20,7 @@ import {
   Chip,
   Alert,
   CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import EditIcon from '@mui/icons-material/Edit';
@@ -59,7 +60,7 @@ const PeopleManagement = ({ user }) => {
     
     try {
       await userService.add(newUser);
-      setSuccess('User added successfully');
+      setSuccess('User invitation sent successfully');
       setAddDialogOpen(false);
       setNewUser({ email: '', name: '', role: 'presales_viewer' });
       loadUsers();
@@ -118,6 +119,10 @@ const PeopleManagement = ({ user }) => {
       presales_viewer: 'Presales Viewer',
     };
     return labels[role] || role;
+  };
+
+  const isAdminUser = (userRole) => {
+    return userRole === 'presales_admin';
   };
 
   if (user.role !== 'presales_admin') {
@@ -278,24 +283,41 @@ const PeopleManagement = ({ user }) => {
                       >
                         <EditIcon fontSize="small" />
                       </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteUser(u.id)}
-                        sx={{
-                          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
-                            transform: 'scale(1.1)',
-                            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
-                          }
-                        }}
+                      
+                      {/* Delete button - disabled for admin users */}
+                      <Tooltip 
+                        title={isAdminUser(u.role) ? "Admin users cannot be deleted" : "Delete user"}
+                        arrow
                       >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteUser(u.id)}
+                            disabled={isAdminUser(u.role)}
+                            sx={{
+                              background: isAdminUser(u.role) 
+                                ? 'linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)' 
+                                : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                              color: 'white',
+                              width: 32,
+                              height: 32,
+                              transition: 'all 0.2s ease',
+                              opacity: isAdminUser(u.role) ? 0.5 : 1,
+                              cursor: isAdminUser(u.role) ? 'not-allowed' : 'pointer',
+                              '&:hover': isAdminUser(u.role) ? {} : {
+                                background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                                transform: 'scale(1.1)',
+                                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
+                              },
+                              '&.Mui-disabled': {
+                                color: 'white',
+                              }
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))

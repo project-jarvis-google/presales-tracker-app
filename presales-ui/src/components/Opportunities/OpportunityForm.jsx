@@ -12,7 +12,7 @@ import {
   Checkbox,
   Alert,
 } from '@mui/material';
-import { STATUS_OPTIONS, REGION_OPTIONS } from '../../utils/constants';
+import { STATUS_OPTIONS, REGION_OPTIONS, SUB_REGION_OPTIONS, CHARGING_OPTIONS } from '../../utils/constants';
 
 const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
   const [formData, setFormData] = useState({
@@ -24,7 +24,7 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
     deal_value_usd: '',
     scoping_doc: '',
     vector_link: '',
-    charging_on_vector: false,
+    charging_on_vector: '',
     period_of_presales_weeks: '',
     status: '',
     assignee_from_gsd: '',
@@ -43,13 +43,28 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
 
   useEffect(() => {
     if (initialData) {
+      // Convert null values to empty strings for display in UI
       const formattedData = {
-        ...initialData,
-        presales_start_date: initialData.presales_start_date || '',
-        expected_planned_start: initialData.expected_planned_start || '',
-        sow_signature_date: initialData.sow_signature_date || '',
-        deal_value_usd: initialData.deal_value_usd || '',
-        period_of_presales_weeks: initialData.period_of_presales_weeks || '',
+        account_name: initialData.account_name ?? '',
+        opportunity: initialData.opportunity ?? '',
+        region_location: initialData.region_location ?? '',
+        region: initialData.region ?? '',
+        sub_region: initialData.sub_region ?? '',
+        deal_value_usd: initialData.deal_value_usd !== null && initialData.deal_value_usd !== undefined ? initialData.deal_value_usd : '',
+        scoping_doc: initialData.scoping_doc ?? '',
+        vector_link: initialData.vector_link ?? '',
+        charging_on_vector: initialData.charging_on_vector ?? '',
+        period_of_presales_weeks: initialData.period_of_presales_weeks !== null && initialData.period_of_presales_weeks !== undefined ? initialData.period_of_presales_weeks : '',
+        status: initialData.status ?? '',
+        assignee_from_gsd: initialData.assignee_from_gsd ?? '',
+        pursuit_lead: initialData.pursuit_lead ?? '',
+        delivery_manager: initialData.delivery_manager ?? '',
+        presales_start_date: initialData.presales_start_date ?? '',
+        expected_planned_start: initialData.expected_planned_start ?? '',
+        sow_signature_date: initialData.sow_signature_date ?? '',
+        staffing_completed_flag: initialData.staffing_completed_flag ?? false,
+        staffing_poc: initialData.staffing_poc ?? '',
+        remarks: initialData.remarks ?? '',
       };
       setFormData(formattedData);
     } else {
@@ -62,7 +77,7 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
         deal_value_usd: '',
         scoping_doc: '',
         vector_link: '',
-        charging_on_vector: false,
+        charging_on_vector: '',
         period_of_presales_weeks: '',
         status: '',
         assignee_from_gsd: '',
@@ -197,53 +212,59 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
       return;
     }
 
-    // IMPROVED: Clean data with proper type conversion and empty string handling
+    // Clean data - send NULL for all empty values except account_name (required)
     const cleanedData = {};
     
-    // String fields - send empty string as empty string (not null)
+    // String fields - send NULL if empty, trimmed string if has value
     const stringFields = [
       'account_name', 'opportunity', 'region_location', 'region', 'sub_region',
       'scoping_doc', 'vector_link', 'status', 'assignee_from_gsd',
-      'pursuit_lead', 'delivery_manager', 'staffing_poc', 'remarks'
+      'pursuit_lead', 'delivery_manager', 'staffing_poc', 'remarks', 'charging_on_vector'
     ];
     
     stringFields.forEach(field => {
       const value = formData[field];
-      if (value && typeof value === 'string') {
-        const trimmed = value.trim();
-        cleanedData[field] = trimmed || '';
+      if (value && typeof value === 'string' && value.trim() !== '') {
+        cleanedData[field] = value.trim();
       } else {
-        cleanedData[field] = '';
+        // Send NULL for empty fields (except account_name which is validated as required above)
+        cleanedData[field] = null;
       }
     });
 
-    // Numeric fields - convert to number or send 0
-    if (formData.deal_value_usd !== '' && formData.deal_value_usd !== null) {
-      cleanedData.deal_value_usd = parseFloat(formData.deal_value_usd) || 0;
-    } else {
-      cleanedData.deal_value_usd = 0;
+    // Ensure account_name is never null (it's required)
+    if (!cleanedData.account_name) {
+      cleanedData.account_name = formData.account_name.trim();
     }
 
-    if (formData.period_of_presales_weeks !== '' && formData.period_of_presales_weeks !== null) {
-      cleanedData.period_of_presales_weeks = parseInt(formData.period_of_presales_weeks) || 0;
+    // Numeric fields - convert to number or send NULL
+    if (formData.deal_value_usd !== '' && formData.deal_value_usd !== null && formData.deal_value_usd !== undefined) {
+      const numValue = parseFloat(formData.deal_value_usd);
+      cleanedData.deal_value_usd = isNaN(numValue) ? null : numValue;
     } else {
-      cleanedData.period_of_presales_weeks = 0;
+      cleanedData.deal_value_usd = null;
     }
 
-    // Boolean fields - always send boolean
-    cleanedData.charging_on_vector = Boolean(formData.charging_on_vector);
+    if (formData.period_of_presales_weeks !== '' && formData.period_of_presales_weeks !== null && formData.period_of_presales_weeks !== undefined) {
+      const numValue = parseInt(formData.period_of_presales_weeks);
+      cleanedData.period_of_presales_weeks = isNaN(numValue) ? null : numValue;
+    } else {
+      cleanedData.period_of_presales_weeks = null;
+    }
+
+    // Boolean field - always send boolean value
     cleanedData.staffing_completed_flag = Boolean(formData.staffing_completed_flag);
 
-    // Date fields - send in YYYY-MM-DD format or empty string
+    // Date fields - send in YYYY-MM-DD format or NULL
     ['presales_start_date', 'expected_planned_start', 'sow_signature_date'].forEach(field => {
       if (formData[field] && formData[field].trim() !== '') {
         cleanedData[field] = formData[field];
       } else {
-        cleanedData[field] = '';
+        cleanedData[field] = null;
       }
     });
 
-    console.log('Submitting cleaned data:', cleanedData);
+    console.log('Submitting cleaned data (NULL for empty values):', cleanedData);
     onSubmit(cleanedData);
   };
 
@@ -309,13 +330,20 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
+              select
               fullWidth
               label="Sub Region"
               name="sub_region"
               value={formData.sub_region}
               onChange={handleChange}
-              placeholder="e.g., West Coast"
-            />
+            >
+              <MenuItem value="">Select Sub Region</MenuItem>
+              {SUB_REGION_OPTIONS.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
           </Grid>
 
           <Grid item xs={12} sm={6}>
@@ -356,8 +384,8 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
             >
               <MenuItem value="">Select Status</MenuItem>
               {STATUS_OPTIONS.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
                 </MenuItem>
               ))}
             </TextField>
@@ -387,6 +415,7 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
               value={formData.assignee_from_gsd}
               onChange={handleChange}
               placeholder="e.g., John Doe"
+              helperText="For multiple names, separate with commas"
             />
           </Grid>
 
@@ -494,22 +523,21 @@ const OpportunityForm = ({ open, onClose, onSubmit, initialData = null }) => {
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={formData.charging_on_vector}
-                  onChange={handleChange}
-                  name="charging_on_vector"
-                  sx={{
-                    color: '#667eea',
-                    '&.Mui-checked': {
-                      color: '#667eea',
-                    },
-                  }}
-                />
-              }
+            <TextField
+              select
+              fullWidth
               label="Charging on Vector"
-            />
+              name="charging_on_vector"
+              value={formData.charging_on_vector}
+              onChange={handleChange}
+            >
+              <MenuItem value="">Select Status</MenuItem>
+              {CHARGING_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
           </Grid>
 
           <Grid item xs={12} sm={6}>
