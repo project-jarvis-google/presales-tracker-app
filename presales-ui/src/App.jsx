@@ -5,7 +5,7 @@ import LoginPage from './components/Login/LoginPage';
 import WelcomeScreen from './components/Layout/WelcomeScreen';
 import MainLayout from './components/Layout/MainLayout';
 import OpportunitiesTable from './components/Opportunities/OpportunitiesTable';
-import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard';
+import UnifiedDashboard from './components/Analytics/UnifiedDashboard';
 import PeopleManagement from './components/People/PeopleManagement';
 import { opportunityService, authService } from './services/api';
 import { GOOGLE_CLIENT_ID } from './utils/constants';
@@ -394,7 +394,7 @@ function App() {
 
           // Tab 1: Analytics
           if (currentTab === 1) {
-            return <AnalyticsDashboard opportunities={opportunities} />;
+            return <UnifiedDashboard opportunities={opportunities} />;
           }
 
           // Tab 2: People Management (only for admins)

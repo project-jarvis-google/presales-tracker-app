@@ -43,14 +43,49 @@ export const REGION_OPTIONS = [
   'JAPAC',
 ];
 
+// Sub-region options mapped by region (Change #1)
+export const SUB_REGION_BY_REGION = {
+  JAPAC: [
+    'India',
+    'AUNZ',
+    'SEA',
+    'Greater China',
+    'Japan',
+    'Korea',
+    'GDC India',
+  ],
+  NORTHAM: [
+    'US Retail',
+    'Canada',
+    'US West',
+    'US TME',
+    'US FS',
+    'US South',
+    'US HCLS',
+    'US North',
+    'US Central',
+    'US EAST',
+    'SAISV Alto',
+  ],
+  EMEA: [
+    'UKI',
+    'DACH',
+    'France',
+    'Benelux',
+    'Nordics',
+    'Southern Europe',
+    'MEA',
+    'CEE',
+  ],
+};
+
+// Flat list for fallback/display
 export const SUB_REGION_OPTIONS = [
-  'SEA',
-  'US FS',
-  'US SOUTH',
-  'Canada',
-  'India',
-  'US North',
-  'Japan',
+  ...new Set([
+    ...SUB_REGION_BY_REGION.JAPAC,
+    ...SUB_REGION_BY_REGION.NORTHAM,
+    ...SUB_REGION_BY_REGION.EMEA,
+  ])
 ];
 
 // Role Options
